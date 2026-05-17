@@ -1,0 +1,27 @@
+{
+  "id": "ec_finance_hub_sfdr",
+  "source_url": "https://finance.ec.europa.eu/regulation-and-supervision/financial-services-legislation/implementing-and-delegated-acts/sustainable-finance-disclosures-regulation_en",
+  "layer": "I_legislation",
+  "document_type": "regulatory_hub",
+  "jurisdiction": "EU",
+  "language": "en",
+  "title": "Implementing and delegated acts - SFDR",
+  "sections": [
+    {
+      "heading": "Overview",
+      "level": 1,
+      "text": "The Sustainable Finance Disclosures Regulation (SFDR) empowers the Commission to adopt delegated and implementing acts to specify how competent authorities and market participants shall comply with the obligations laid down in the directive.\nFind links to implementing and delegated acts for Regulation (EU) 2019/2088 on sustainability-related disclosure in the financial services sector (SFDR)."
+    }
+  ],
+  "full_text": "## Overview\nThe Sustainable Finance Disclosures Regulation (SFDR) empowers the Commission to adopt delegated and implementing acts to specify how competent authorities and market participants shall comply with the obligations laid down in the directive.\nFind links to implementing and delegated acts for Regulation (EU) 2019/2088 on sustainability-related disclosure in the financial services sector (SFDR).",
+  "date_retrieved": "2026-05-17T00:20:56.744154+00:00",
+  "extra": {
+    "topic": "SFDR regulation hub — Main Regulation (EU) 2019/2088 plus Regulatory Technical Standards (RTS)",
+    "related_celex": [
+      "32019R2088",
+      "32023R0363",
+      "32022R1288R(01)"
+    ],
+    "related_count": 3
+  }
+}

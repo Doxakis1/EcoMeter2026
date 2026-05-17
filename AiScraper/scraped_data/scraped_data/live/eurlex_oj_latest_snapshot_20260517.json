@@ -1,0 +1,31 @@
+{
+  "id": "eurlex_oj_latest_snapshot_20260517",
+  "source_url": "https://eur-lex.europa.eu/oj/direct-access.html",
+  "layer": "IV_live",
+  "document_type": "regulatory_feed",
+  "jurisdiction": "EU",
+  "language": "en",
+  "title": "EUR-Lex OJ Latest Acts",
+  "sections": [
+    {
+      "heading": "Status",
+      "level": 1,
+      "text": "All EUR-Lex OJ discovery URLs returned WAF challenges at scrape time. Retry later."
+    }
+  ],
+  "full_text": "## Status\nAll EUR-Lex OJ discovery URLs returned WAF challenges at scrape time. Retry later.",
+  "date_retrieved": "2026-05-17T08:04:05.093088+00:00",
+  "extra": {
+    "feed_id": "eurlex_oj_latest",
+    "feed_label": "EUR-Lex OJ Latest Acts",
+    "snapshot_date": "20260517",
+    "waf_blocked": true,
+    "candidates_tried": [
+      "https://eur-lex.europa.eu/oj/direct-access.html",
+      "https://eur-lex.europa.eu/oj/all/auto.html",
+      "https://eur-lex.europa.eu/EN/today.html",
+      "https://eur-lex.europa.eu/EN/oj/"
+    ],
+    "topic": "Latest EU legal acts published in the Official Journal"
+  }
+}
