@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="180" viewBox="0 0 680 180">
+
+  <text x="30" y="118" font-family="Georgia, serif" font-size="90" font-weight="700" fill="#1B3A6B" letter-spacing="-1">Ec</text>
+
+  <g transform="translate(163, 44)">
+    <circle cx="36" cy="36" r="38" fill="#f8f9fa" stroke="#1B3A6B" stroke-width="3"/>
+    <path d="M5,56 A34,34 0 0,1 67,56" fill="none" stroke="#e5e7eb" stroke-width="9" stroke-linecap="round"/>
+    <path d="M5,56 A34,34 0 0,1 20,18" fill="none" stroke="#ef4444" stroke-width="9" stroke-linecap="round"/>
+    <path d="M20,18 A34,34 0 0,1 52,18" fill="none" stroke="#f59e0b" stroke-width="9" stroke-linecap="round"/>
+    <path d="M52,18 A34,34 0 0,1 67,56" fill="none" stroke="#22c55e" stroke-width="9" stroke-linecap="round"/>
+    <line x1="36" y1="36" x2="62" y2="42" stroke="#1B3A6B" stroke-width="3.5" stroke-linecap="round"/>
+    <circle cx="36" cy="36" r="5" fill="#1B3A6B"/>
+  </g>
+
+  <text x="252" y="118" font-family="Georgia, serif" font-size="90" font-weight="700" fill="#1B3A6B" letter-spacing="-1">Meter</text>
+
+  <text x="30" y="155" font-family="Georgia, serif" font-size="13" fill="#1a5c3a" letter-spacing="4">BIODIVERSITY RISK INTELLIGENCE</text>
+
+</svg>
