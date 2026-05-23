@@ -1,5 +1,6 @@
 import os
 import getpass
+from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -21,6 +22,9 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 from langchain_community.document_loaders import UnstructuredURLLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 import nltk
 nltk.download('averaged_perceptron_tagger_eng')
 
@@ -54,42 +58,104 @@ llm = ChatGoogleGenerativeAI(
     temperature=0.7,
 )
 
-def load_json_from_folder(folder_path):
-    all_data = []
+def load_single_json_file_as_documents(file_path):
+    all_documents = []
+    path = Path(file_path)
 
-    # Convert string path to a Path object
-    target_dir = Path(folder_path)
+    if not path.exists():
+        raise FileNotFoundError(f"❌ Could not find the data file at: {path.absolute()}")
 
-    # Loop through all files ending in .json inside the folder
-    for file_path in target_dir.glob("*.json"):
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                all_data.append(data)
-                print(f"✅ Successfully loaded: {file_path.name}")
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"❌ Failed to read {file_path.name}: {e}")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
-    return all_data
-documents = load_json_from_folder("../AiChunkedData")
+        # Case 1: The file contains a list of multiple chunks/entries (Most Likely)
+        if isinstance(data, list):
+            print(f"📁 Found a list containing {len(data)} entries inside {path.name}...")
+            for idx, item in enumerate(data):
+                if isinstance(item, dict):
+                    # Fallback chain to find text contents dynamically
+                    content = item.get("text") or item.get("page_content") or item.get("content") or str(item)
+                    # Extract metadata if it exists, or use the item itself as metadata fields
+                    metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else item.copy()
+                else:
+                    content = str(item)
+                    metadata = {}
 
-doc_id = 0
-for doc in documents:
-    doc.page_content = " ".join(doc.page_content.split()) # remove white space
-    doc.metadata["id"] = doc_id #make a document id and add it to the document metadata
-	#print(doc.metadata)
-    doc_id += 1
+                # Clean up whitespace layout anomalies
+                cleaned_content = " ".join(content.split())
 
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=10)
+                # Stamp tracking parameters to metadata
+                metadata["id"] = idx
+                metadata["source_file"] = path.name
+
+                # Append a dedicated separate document object
+                all_documents.append(Document(page_content=cleaned_content, metadata=metadata))
+
+        # Case 2: The file is a single big dictionary with entries mapped under a specific key
+        elif isinstance(data, dict):
+            print(f"📁 Found a single dictionary root inside {path.name}. Searching for entry groups...")
+            # Look for common array keys like 'entries', 'chunks', 'segments', 'documents'
+            possible_keys = ["entries", "chunks", "segments", "documents", "data"]
+            target_list = None
+
+            for key in possible_keys:
+                if key in data and isinstance(data[key], list):
+                    target_list = data[key]
+                    break
+
+            if target_list:
+                for idx, item in enumerate(target_list):
+                    content = item.get("text") or item.get("page_content") or item.get("content") or str(item)
+                    metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else item.copy()
+                    cleaned_content = " ".join(content.split())
+                    metadata["id"] = idx
+                    metadata["source_file"] = path.name
+                    all_documents.append(Document(page_content=cleaned_content, metadata=metadata))
+            else:
+                # Fallback: Treat the whole dictionary as one single root document entry
+                content = data.get("text") or data.get("page_content") or str(data)
+                metadata = data.copy()
+                metadata["id"] = 0
+                metadata["source_file"] = path.name
+                all_documents.append(Document(page_content=" ".join(content.split()), metadata=metadata))
+
+        print(f"✅ Cleanly separated data into {len(all_documents)} initial LangChain Documents.")
+        return all_documents
+
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"❌ Failed to parse JSON file: {e}")
+        return []
+
+# 1. Run the single file extractor pointing directly to your JSON
+# Update the path string if it's located somewhere else relative to main.py
+documents = load_single_json_file_as_documents("../AiChunkedData/all_segments_ready.json")
+
+# 2. Split with safe token sizing to stay clear of the 512 IBM Watsonx limits
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=900,  # Keeping character sizes tight (~225 tokens) to protect IBM limits
+    chunk_overlap=100
+)
 docs = text_splitter.split_documents(documents)
+
+# 3. Streamlined embedding ingestion
 vectorstore = Chroma.from_documents(documents=docs, embedding=embeddings)
 retriever = vectorstore.as_retriever()
-template = """
+print(f"🚀 Database updated! Your single JSON file successfully generated {len(docs)} searchable vector entries.")
+
+old_template = """
 You are a lawyer reviewing documents/or ideas for new businesses. You specialize in EU law, and specifically in \
 biodiversity. Your job is to analyze the user input, and give valuable output about whethere there is any gaps, or \
 biodiversity risks or cornerns.
 Answer style should be proffesional. Give citations and be thorough, do not hallucinate. Give the user questions to \
 provoke improvment and make the business more compliant with European biodiversity laws.
+Ideal Answer Length 10-15 sentences.\n\n{context}\nQuestion: {question}\nAnswer:
+"""
+template = """
+You are a law expert on EU contract law and biodiversity.
+You will be given business ideas and your job is to find possible places where the business idea could be breaking biodiversity rules. Ellaborate and give the user questions to clarify so that their business can be fully legal without any issues.
+Answer questions with deep knowledge of the law, cases and give detailed citations.
+Give your answers back in a markdown format that I can use in my html site.
 Ideal Answer Length 10-15 sentences.\n\n{context}\nQuestion: {question}\nAnswer:
 """
 def format_docs(docs):
@@ -106,7 +172,6 @@ chain = (
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
 
-# ... [Keep all your URL scraping, Chroma setup, and 'chain' initialization here] ...
 
 class RAGServerHandler(BaseHTTPRequestHandler):
 
@@ -123,7 +188,7 @@ class RAGServerHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response, ensure_ascii=False).encode("utf-8"))
 
         # 2. Handle the GET "/prompt2?user_input=..." Route
-        elif parsed_url.path == "/prompt2":
+        elif parsed_url.path == "/prompt":
             query_params = parse_qs(parsed_url.query)
             user_input_list = query_params.get("user_input", None)
 
@@ -165,7 +230,7 @@ class RAGServerHandler(BaseHTTPRequestHandler):
 # 3. Boot the native HTTP Server
 if __name__ == "__main__":
     host_name = "0.0.0.0"
-    port = 8080
+    port = 9090
 
     server = HTTPServer((host_name, port), RAGServerHandler)
     print(f"🚀 Server running cleanly without Uvicorn at http://{host_name}:{port}")
