@@ -1,6 +1,11 @@
 import os
 import getpass
 from dotenv import load_dotenv
+from fastapi import FastAPI
+from pydantic import BaseModel
+import uvicorn
+import json
+import asyncio
 
 # Import watsonx stuff
 from ibm_watson_machine_learning.foundation_models.utils.enums import ModelTypes
@@ -20,9 +25,6 @@ import nltk
 nltk.download('averaged_perceptron_tagger_eng')
 
 # Import gemini stuff
-import asyncio
-import fastapi
-from fastapi import FastAPI
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 # Load .env file
@@ -52,69 +54,124 @@ llm = ChatGoogleGenerativeAI(
     temperature=0.7,
 )
 
-### THIS CHANGES TO OUR CHUNKED DATA
-URLS_DICTIONARY = {
-    "ibm.com_events_think_faq.html": "https://www.ibm.com/events/think/faq",
-    "events_think_agenda.html": "https://www.ibm.com/events/think/agenda",
-    "products_watsonx_ai.html": "https://www.ibm.com/products/watsonx-ai",
-    "products_watsonx_ai_foundation_models.html": "https://www.ibm.com/products/watsonx-ai/foundation-models",
-    "watsonx_pricing.html": "https://www.ibm.com/watsonx/pricing",
-    "watsonx.html": "https://www.ibm.com/watsonx",
-    "products_watsonx_data.html": "https://www.ibm.com/products/watsonx-data",
-    "products_watsonx_assistant.html": "https://www.ibm.com/products/watsonx-assistant",
-    "products_watsonx_code_assistant.html": "https://www.ibm.com/products/watsonx-code-assistant",
-    "products_watsonx_orchestrate.html": "https://www.ibm.com/products/watsonx-orchestrate",
-    "products_watsonx_governance.html": "https://www.ibm.com/products/watsonx-governance",
-    "granite_code_models_open_source.html": "https://research.ibm.com/blog/granite-code-models-open-source",
-    "red_hat_enterprise_linux_ai.html": "https://www.redhat.com/en/about/press-releases/red-hat-delivers-accessible-open-source-generative-ai-innovation-red-hat-enterprise-linux-ai",
-    "model_choice.html": "https://www.ibm.com/blog/announcement/enterprise-grade-model-choices/",
-    "democratizing.html": "https://www.ibm.com/blog/announcement/democratizing-large-language-model-development-with-instructlab-support-in-watsonx-ai/",
-    "ibm_consulting_expands_ai.html": "https://newsroom.ibm.com/Blog-IBM-Consulting-Expands-Capabilities-to-Help-Enterprises-Scale-AI",
-    "ibm_data_product_hub.html": "https://www.ibm.com/products/data-product-hub",
-    "ibm_price_performance_data.html": "https://www.ibm.com/blog/announcement/delivering-superior-price-performance-and-enhanced-data-management-for-ai-with-ibm-watsonx-data/",
-    "ibm_bi_adoption.html": "https://www.ibm.com/blog/a-new-era-in-bi-overcoming-low-adoption-to-make-smart-decisions-accessible-for-all/",
-    "watsonx_code_assistant_for_z.html": "https://www.ibm.com/blog/announcement/ibm-watsonx-code-assistant-for-z-accelerate-the-application-lifecycle-with-generative-ai-and-automation/",
-    "code_assistant_for_java.html": "https://www.ibm.com/blog/announcement/watsonx-code-assistant-java/",
-    "code_assistant_for_orchestrate.html": "https://www.ibm.com/blog/announcement/watsonx-orchestrate-ai-z-assistant/",
-    "accelerating_gen_ai.html": "https://newsroom.ibm.com/Blog-How-IBM-Cloud-is-Accelerating-Business-Outcomes-with-Gen-AI",
-    "watsonx_open_source.html": "https://newsroom.ibm.com/2024-05-21-IBM-Unveils-Next-Chapter-of-watsonx-with-Open-Source,-Product-Ecosystem-Innovations-to-Drive-Enterprise-AI-at-Scale",
-    "ibm_concert.html": "https://www.ibm.com/products/concert",
-    "ibm_consulting_advantage_news.html": "https://newsroom.ibm.com/2024-01-17-IBM-Introduces-IBM-Consulting-Advantage,-an-AI-Services-Platform-and-Library-of-Assistants-to-Empower-Consultants",
-    "ibm_consulting_advantage_info.html": "https://www.ibm.com/consulting/info/ibm-consulting-advantage"
-}
-COLLECTION_NAME = "askibm_think_2024"
-documents = []
+def load_json_from_folder(folder_path):
+    all_data = []
 
-for url in list(URLS_DICTIONARY.values()):
-    loader = UnstructuredURLLoader(urls=[url])
-    data = loader.load()
-    documents += data
+    # Convert string path to a Path object
+    target_dir = Path(folder_path)
+
+    # Loop through all files ending in .json inside the folder
+    for file_path in target_dir.glob("*.json"):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                all_data.append(data)
+                print(f"✅ Successfully loaded: {file_path.name}")
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"❌ Failed to read {file_path.name}: {e}")
+
+    return all_data
+documents = load_json_from_folder("../AiChunkedData")
 
 doc_id = 0
 for doc in documents:
     doc.page_content = " ".join(doc.page_content.split()) # remove white space
-
     doc.metadata["id"] = doc_id #make a document id and add it to the document metadata
-
 	#print(doc.metadata)
     doc_id += 1
 
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=0)
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=10)
 docs = text_splitter.split_documents(documents)
 vectorstore = Chroma.from_documents(documents=docs, embedding=embeddings)
 retriever = vectorstore.as_retriever()
-template = """Generate a summary of the context that answers the question. Explain the answer in multiple steps if possible.
-Answer style should match the context. Ideal Answer Length 2-3 sentences.\n\n{context}\nQuestion: {question}\nAnswer:
+template = """
+You are a lawyer reviewing documents/or ideas for new businesses. You specialize in EU law, and specifically in \
+biodiversity. Your job is to analyze the user input, and give valuable output about whethere there is any gaps, or \
+biodiversity risks or cornerns.
+Answer style should be proffesional. Give citations and be thorough, do not hallucinate. Give the user questions to \
+provoke improvment and make the business more compliant with European biodiversity laws.
+Ideal Answer Length 10-15 sentences.\n\n{context}\nQuestion: {question}\nAnswer:
 """
-prompt = ChatPromptTemplate.from_template(template)
 def format_docs(docs):
     return "\n\n".join([d.page_content for d in docs])
+
+
+prompt = ChatPromptTemplate.from_template(template)
 chain = (
-    {"context": retriever | format_docs, "question": RunnablePassthrough()}
-    | prompt
+	{"context": retriever | format_docs, "question": RunnablePassthrough()}
+	| prompt
     | llm
     | StrOutputParser()
 )
-print("GEMINI ANSWER")
-print(chain.invoke("What is IBM Concert?"))
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse, parse_qs
 
+# ... [Keep all your URL scraping, Chroma setup, and 'chain' initialization here] ...
+
+class RAGServerHandler(BaseHTTPRequestHandler):
+
+    # 1. Handle the GET "/" Route
+    def do_GET(self):
+        parsed_url = urlparse(self.path)
+
+        if parsed_url.path == "/":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+
+            response = {"status": "online", "message": "Καλώς ήρθες στο native API σου!"}
+            self.wfile.write(json.dumps(response, ensure_ascii=False).encode("utf-8"))
+
+        # 2. Handle the GET "/prompt2?user_input=..." Route
+        elif parsed_url.path == "/prompt2":
+            query_params = parse_qs(parsed_url.query)
+            user_input_list = query_params.get("user_input", None)
+
+            if not user_input_list:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Missing 'user_input' query parameter.")
+                return
+
+            user_input = user_input_list[0]
+
+            # Run your LangChain query pipeline
+            print(f"Running invoke with input: {user_input}")
+            answer = chain.invoke(user_input)
+            print(answer)
+
+            response_data = {
+                "status": "success",
+                "user_prompt": user_input,
+                "server_response": answer
+            }
+
+            # Send HTTP Headers
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+
+            # Output formatted response to terminal and browser
+            print(">>> [SERVER RESPONSE] Ο server responds with JSON:")
+            print(json.dumps(response_data, indent=4, ensure_ascii=False))
+            self.wfile.write(json.dumps(response_data, ensure_ascii=False).encode("utf-8"))
+
+        else:
+            # Handle 404 Not Found
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(b"Route Not Found")
+
+# 3. Boot the native HTTP Server
+if __name__ == "__main__":
+    host_name = "0.0.0.0"
+    port = 8080
+
+    server = HTTPServer((host_name, port), RAGServerHandler)
+    print(f"🚀 Server running cleanly without Uvicorn at http://{host_name}:{port}")
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopping server...")
+        server.server_close()
